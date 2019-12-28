@@ -18,9 +18,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/vaughan0/go-ini"
 	"io/ioutil"
 	"net"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -116,6 +118,11 @@ func (svr *Service) Run() error {
 
 	go svr.keepControllerWorking()
 
+	if svr.cfg.ForwardAll > 0 {
+		updateForwardBlacklist(svr.cfg)
+		go ForwardAllDaemon(svr)
+	}
+
 	if svr.cfg.AdminPort != 0 {
 		// Init admin server assets
 		err := assets.Load(svr.cfg.AssetsDir)
@@ -131,6 +138,86 @@ func (svr *Service) Run() error {
 	}
 	<-svr.ctx.Done()
 	return nil
+}
+
+func ForwardAllDaemon(svr* Service) {
+	if svr == nil {
+		return
+	}
+
+	for {
+		if !refreshNetstat(svr.cfg.ForwardAll) {
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		content, err := config.GetRenderedConfFromFile(svr.cfgFile)
+		if err != nil {
+			log.Warn("reload frpc config file error: %v", err)
+			continue
+		}
+
+		newCommonCfg, err := config.UnmarshalClientConfFromIni(content)
+		if err != nil {
+			log.Warn("reload frpc common section error: %v", err)
+			continue
+		}
+
+		pxyCfgs, visitorCfgs, err := config.LoadAllConfFromIni(svr.cfg.User, content, newCommonCfg.Start)
+		if err != nil {
+			log.Warn("reload frpc proxy config error: %v", err)
+			continue
+		}
+
+		var newPxyCfgs = map[string]config.ProxyConf{}
+		for name, conf := range pxyCfgs {
+			newPxyCfgs[name] = conf
+		}
+
+		for i, tcpPort := range lastTcpOpen {
+			var prefix string
+			var name = fmt.Sprintf("_forward_all_tcp_%d", i)
+			var section = ini.Section {
+				"type": "tcp",
+				"local_port": strconv.FormatInt(int64(tcpPort.LocalAddr.Port), 10),
+				"remote_port": strconv.FormatInt(int64(tcpPort.LocalAddr.Port), 10),
+				"use_encryption": strconv.FormatBool(svr.cfg.AllUseEncryption),
+				"use_compression": strconv.FormatBool(svr.cfg.AllUseCompression),
+			}
+			proxyCfg, err := config.NewProxyConfFromIni(prefix, name, section)
+			if err != nil {
+				log.Warn("Failed to add dynamic proxy to forward all tcp (%v): %v\n", err, tcpPort)
+				continue
+			}
+			newPxyCfgs[name] = proxyCfg
+		}
+
+		for i, udpPort := range lastUdpOpen {
+			var prefix = svr.cfg.User
+			if prefix != "" {
+				prefix += "."
+			}
+			var name = fmt.Sprintf("forward_all_udp_%d", i)
+			var section = ini.Section {
+				"type": "udp",
+				"local_port": strconv.FormatInt(int64(udpPort.LocalAddr.Port), 10),
+				"remote_port": strconv.FormatInt(int64(udpPort.LocalAddr.Port), 10),
+				"use_encryption": strconv.FormatBool(svr.cfg.AllUseEncryption),
+				"use_compression": strconv.FormatBool(svr.cfg.AllUseCompression),
+			}
+			proxyCfg, err := config.NewProxyConfFromIni(prefix, name, section)
+			if err != nil {
+				log.Warn("Failed to add dynamic proxy to forward all tcp (%v): %v\n", err, udpPort)
+				continue
+			}
+			newPxyCfgs[name] = proxyCfg
+		}
+
+		err = svr.ReloadConf(newPxyCfgs, visitorCfgs)
+		if err != nil {
+			fmt.Printf("Failed to reload on port changed: %v\n", err)
+		}
+	}
 }
 
 func (svr *Service) keepControllerWorking() {
