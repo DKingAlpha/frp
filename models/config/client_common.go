@@ -115,6 +115,16 @@ type ClientCommonConf struct {
 	// before the connection is terminated, in seconds. It is not recommended
 	// to change this value. By default, this value is 90.
 	HeartBeatTimeout int64 `json:"heartbeat_timeout"`
+
+	// false, true(tcp&udp), tcp, udp
+	ForwardAll        string   `json:"forward_all"`
+	ForwardAllRefreshInterval int `json:"forward_all_refresh_interval"`
+	AllUseEncryption  bool     `json:"all_use_encryption"`
+	AllUseCompression bool     `json:"all_use_compression"`
+	BlackListIP       []string `json:"blacklist_ip"`
+	BlackListPort     []uint16 `json:"blacklist_port"`
+	BlackListIPPort   []string `json:"blacklist_ip_port"`
+	BlackListProcess  []string `json:"blacklist_process"`
 }
 
 // GetDefaultClientConf returns a client configuration with default values.
@@ -144,6 +154,14 @@ func GetDefaultClientConf() ClientCommonConf {
 		TLSEnable:         false,
 		HeartBeatInterval: 30,
 		HeartBeatTimeout:  90,
+		ForwardAll:        "false",
+		ForwardAllRefreshInterval: 0,
+		AllUseEncryption:  false,
+		AllUseCompression: false,
+		BlackListIP:       []string{},
+		BlackListPort:     []uint16{},
+		BlackListIPPort:   []string{},
+		BlackListProcess:  []string{},
 	}
 }
 
@@ -294,6 +312,83 @@ func UnmarshalClientConfFromIni(content string) (cfg ClientCommonConf, err error
 			cfg.HeartBeatInterval = v
 		}
 	}
+
+	if tmpStr, ok = conf.Get("common", "all_use_encryption"); ok {
+		var allUseEncryption bool
+		if allUseEncryption, err = strconv.ParseBool(tmpStr); err != nil {
+			err = fmt.Errorf("Parse conf error: invalid all_use_compression")
+			return
+		} else {
+			cfg.AllUseEncryption = allUseEncryption
+		}
+	}
+
+	if tmpStr, ok = conf.Get("common", "all_use_compression"); ok {
+		var allUseCompression bool
+		if allUseCompression, err = strconv.ParseBool(tmpStr); err != nil {
+			err = fmt.Errorf("Parse conf error: invalid all_use_compression")
+			return
+		} else {
+			cfg.AllUseCompression = allUseCompression
+		}
+	}
+
+	if tmpStr, ok = conf.Get("common", "forward_all"); ok {
+		if strings.Contains(tmpStr, "tcp") || strings.Contains(tmpStr, "udp") ||
+			tmpStr == "true"|| tmpStr == "false" {
+			cfg.ForwardAll = tmpStr
+		} else {
+			err = fmt.Errorf("Parse conf error: invalid forward_all")
+			return
+		}
+	}
+
+	if tmpStr, ok = conf.Get("common", "forward_all_refresh_interval"); ok {
+		if v, err = strconv.ParseInt(tmpStr, 10, 64); err != nil {
+			err = fmt.Errorf("Parse conf error: invalid forward_all_refresh_interval")
+			return
+		} else {
+			cfg.ForwardAllRefreshInterval = int(v)
+		}
+	}
+
+	if tmpStr, ok = conf.Get("common", "blacklist_ip"); ok {
+		var ips []string
+		for _, ipstr := range strings.Split(tmpStr, ",") {
+			ips = append(ips, strings.TrimSpace(ipstr))
+		}
+		cfg.BlackListIP = ips
+	}
+
+	if tmpStr, ok = conf.Get("common", "blacklist_port"); ok {
+		var ports []uint16
+		for _, portStr := range strings.Split(tmpStr, ",") {
+			v, err = strconv.ParseInt(strings.TrimSpace(portStr), 10, 64)
+			if err != nil {
+				err = fmt.Errorf("Parse conf error: invalid blacklist_port")
+				return
+			}
+			ports = append(ports, uint16(v))
+		}
+		cfg.BlackListPort = ports
+	}
+
+	if tmpStr, ok = conf.Get("common", "blacklist_ip_port"); ok {
+		var ipports []string
+		for _, ipportStr := range strings.Split(tmpStr, ",") {
+			ipports = append(ipports, strings.TrimSpace(ipportStr))
+		}
+		cfg.BlackListIPPort = ipports
+	}
+
+	if tmpStr, ok = conf.Get("common", "blacklist_process"); ok {
+		var processes []string
+		for _, processStr := range strings.Split(tmpStr, ",") {
+			processes = append(processes, strings.TrimSpace(processStr))
+		}
+		cfg.BlackListProcess = processes
+	}
+
 	return
 }
 

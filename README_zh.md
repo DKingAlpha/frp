@@ -50,6 +50,7 @@ frp 是一个可用于内网穿透的高性能的反向代理应用，支持 tcp
     * [URL 路由](#url-路由)
     * [通过代理连接 frps](#通过代理连接-frps)
     * [范围端口映射](#范围端口映射)
+    * [所有端口映射](#所有端口映射)
     * [插件](#插件)
 * [开发计划](#开发计划)
 * [为 frp 做贡献](#为-frp-做贡献)
@@ -434,6 +435,8 @@ dashboard_port = 7500
 # dashboard 用户名密码，默认都为 admin
 dashboard_user = admin
 dashboard_pwd = admin
+# 清除offline状态的代理的超时设置，单位为分钟。默认为10080（一周）
+offline_timeout = 15
 ```
 
 打开浏览器通过 `http://[server_addr]:7500` 访问 dashboard 界面，用户名密码默认为 `admin`。
@@ -857,6 +860,30 @@ remote_port = 6000-6006,6007
 ```
 
 实际连接成功后会创建 8 个 proxy，命名为 `test_tcp_0, test_tcp_1 ... test_tcp_7`。
+
+### 所有端口映射
+
+在frpc的配置文件中可以指定映射本机所有开放端口，并周期性地刷新端口配置，且支持各种黑名单避免转发敏感端口。
+
+这个功能可以使你的机器表现得像拥有一个公网IP。目前只支持tcp与udp类型。
+
+这一功能通过在 `common` 段落中设置 `forward_all` 选项来实现。示例如下：
+```ini
+[common]
+forward_all = tcp+udp
+forward_all_refresh_interval = 10
+all_use_encryption = true
+all_use_compression = false
+blacklist_ip = [fe80::7dd0:36c9:5993:6225], 127.0.0.1, 192.168.1.100, 192.168.1.0/24
+blacklist_ipport = 127.0.0.1:1434, 0.0.0.0:135
+blacklist_port = 135, 139, 443, 445, 1433
+blacklist_process = chrome.exe, System, svchost.exe, vmware-authd.exe, wininit.exe, spoolsv.exe, services.exe
+```
+
+* **forward_all**: 可设置为 false, tcp, udp, true（即tcp+udp）, tcp/udp（任意分割符均可）
+* **forward_all_refresh_interval**: 端口状态刷新间隔，单位是秒。当本机端口未变化时不会导致代理配置重载。
+* **all_use_encryption**: 这些自动发现的端口是否使用加密
+* **all_use_compression**: 这些自动发现的端口是否使用压缩
 
 ### 插件
 

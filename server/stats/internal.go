@@ -26,11 +26,13 @@ type internalCollector struct {
 	enable bool
 	info   *ServerStatistics
 	mu     sync.Mutex
+	timeout int64
 }
 
-func NewInternalCollector(enable bool) Collector {
+func NewInternalCollector(enable bool, timeout int64) Collector {
 	return &internalCollector{
 		enable: enable,
+		timeout: timeout,
 		info: &ServerStatistics{
 			TotalTrafficIn:  metric.NewDateCounter(ReserveDays),
 			TotalTrafficOut: metric.NewDateCounter(ReserveDays),
@@ -47,10 +49,8 @@ func NewInternalCollector(enable bool) Collector {
 func (collector *internalCollector) Run() error {
 	go func() {
 		for {
-			time.Sleep(12 * time.Hour)
-			log.Debug("start to clear useless proxy statistics data...")
+			time.Sleep(1 * time.Minute)
 			collector.ClearUselessInfo()
-			log.Debug("finish to clear useless proxy statistics data")
 		}
 	}()
 	return nil
@@ -61,7 +61,7 @@ func (collector *internalCollector) ClearUselessInfo() {
 	collector.mu.Lock()
 	defer collector.mu.Unlock()
 	for name, data := range collector.info.ProxyStatistics {
-		if !data.LastCloseTime.IsZero() && time.Since(data.LastCloseTime) > time.Duration(7*24)*time.Hour {
+		if !data.LastCloseTime.IsZero() && time.Since(data.LastCloseTime) > time.Duration(collector.timeout) * time.Minute {
 			delete(collector.info.ProxyStatistics, name)
 			log.Trace("clear proxy [%s]'s statistics data, lastCloseTime: [%s]", name, data.LastCloseTime.String())
 		}

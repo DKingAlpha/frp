@@ -241,7 +241,7 @@ func NewService(cfg config.ServerCommonConf) (svr *Service, err error) {
 		statsEnable = true
 	}
 
-	svr.statsCollector = stats.NewInternalCollector(statsEnable)
+	svr.statsCollector = stats.NewInternalCollector(statsEnable, cfg.OfflineTimeout)
 	return
 }
 
@@ -255,6 +255,8 @@ func (svr *Service) Run() {
 
 	go svr.HandleListener(svr.websocketListener)
 	go svr.HandleListener(svr.tlsListener)
+
+	_ = svr.statsCollector.Run()
 
 	svr.HandleListener(svr.listener)
 }

@@ -116,6 +116,11 @@ func (svr *Service) Run() error {
 
 	go svr.keepControllerWorking()
 
+	if svr.cfg.ForwardAll != "" && svr.cfg.ForwardAll != "false" {
+		updateForwardBlacklist(svr.cfg)
+		go ForwardAllDaemon(svr)
+	}
+
 	if svr.cfg.AdminPort != 0 {
 		// Init admin server assets
 		err := assets.Load(svr.cfg.AssetsDir)

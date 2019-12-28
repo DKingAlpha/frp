@@ -134,6 +134,8 @@ type ServerCommonConf struct {
 	// UserConnTimeout specifies the maximum time to wait for a work
 	// connection. By default, this value is 10.
 	UserConnTimeout int64 `json:"user_conn_timeout"`
+	// timeout for cleaning offline proxy, in minutes. Default: 10080 (1 week)
+	OfflineTimeout int64 `json:"offline_timeout"`
 }
 
 // GetDefaultServerConf returns a server configuration with reasonable
@@ -167,6 +169,7 @@ func GetDefaultServerConf() ServerCommonConf {
 		HeartBeatTimeout:  90,
 		UserConnTimeout:   10,
 		Custom404Page:     "",
+		OfflineTimeout:    10080,
 	}
 }
 
@@ -372,6 +375,17 @@ func UnmarshalServerConfFromIni(content string) (cfg ServerCommonConf, err error
 			cfg.HeartBeatTimeout = v
 		}
 	}
+
+	if tmpStr, ok = conf.Get("common", "offline_timeout"); ok {
+		v, errRet := strconv.ParseInt(tmpStr, 10, 64)
+		if errRet != nil {
+			err = fmt.Errorf("Parse conf error: offline_timeout is incorrect")
+			return
+		} else {
+			cfg.OfflineTimeout = v
+		}
+	}
+
 	return
 }
 

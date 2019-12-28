@@ -54,6 +54,7 @@ frp also has a P2P connect mode.
     * [URL routing](#url-routing)
     * [Connecting to frps via HTTP PROXY](#connecting-to-frps-via-http-proxy)
     * [Range ports mapping](#range-ports-mapping)
+    * [All ports mapping](#all-ports-mapping)
     * [Plugins](#plugins)
 * [Development Plan](#development-plan)
 * [Contributing](#contributing)
@@ -412,6 +413,8 @@ dashboard_port = 7500
 # dashboard's username and password are both optional，if not set, default is admin.
 dashboard_user = admin
 dashboard_pwd = admin
+# timeout to clean offline proxies. Unit: minutes. Default: 10080 (1 week)
+offline_timeout = 15
 ```
 
 Then visit `http://[server_addr]:7500` to see the dashboard, with username and password both being `admin` by default.
@@ -805,6 +808,30 @@ remote_port = 6000-6006,6007
 ```
 
 frpc will generate 8 proxies like `test_tcp_0`, `test_tcp_1`, ..., `test_tcp_7`.
+
+### All ports mapping
+
+Set `forward_all` in `common` section to forward all open ports on your local machine, which refreshes periodically. Varieties of blacklist are provided to avoid forwarding any risky ports.
+
+This works like having assigned a **shadow** public IP address to frpc host. Connecting to frps is equivalent to directly connecting to your local machine. Currently only TCP&UDP are supported.
+
+```ini
+[common]
+forward_all = tcp+udp
+forward_all_refresh_interval = 10
+all_use_encryption = true
+all_use_compression = false
+blacklist_ip = [fe80::7dd0:36c9:5993:6225], 127.0.0.1, 192.168.1.100, 192.168.1.0/24
+blacklist_ipport = 127.0.0.1:1434, 0.0.0.0:135
+blacklist_port = 135, 139, 443, 445, 1433
+blacklist_process = chrome.exe, System, svchost.exe, vmware-authd.exe, wininit.exe, spoolsv.exe, services.exe
+```
+
+* **forward_all**: Available options: false, tcp, udp, true(tcp+udp), tcp/udp(or any other separator)
+* **forward_all_refresh_interval**: Unit: seconds
+* **all_use_encryption**: Enable encryption on these connections.
+* **all_use_compression**: Enable compression on these connections.
+
 
 ### Plugins
 
